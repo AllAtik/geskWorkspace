@@ -1,0 +1,131 @@
+void UsrSensorHallEffectPinStatus(void)
+{
+    // send hall effect status to gsm
+    uint8_t m_HalleffectToGsmStatus = 0;
+    _io uint8_t previousHallEffectStatus = 0;
+    uint8_t currentHalleffectStatus = 0;
+
+    g_sAllSensorValues.halleffectAlarmStatus = 0;
+    if(_TOP_COVER_HALL_READ_PIN())
+    {
+        currentHalleffectStatus |= 0x01;
+        m_HalleffectToGsmStatus = 0x01;     // current state
+    }
+    else
+    {
+        currentHalleffectStatus &= (~0x01);
+        m_HalleffectToGsmStatus = 0x00;   // current state
+    }
+
+    if(_BATTERY_COVER_HALL_READ_PIN())
+    {
+        currentHalleffectStatus |= 0x02;
+        m_HalleffectToGsmStatus = 0x02;  // current state
+    }
+    else
+    {
+        currentHalleffectStatus &= (~0x02);
+        m_HalleffectToGsmStatus = 0x00;  // current state
+    }
+
+    if(m_HalleffectToGsmStatus != previousHallEffectStatus)
+    {
+        g_sAllSensorValues.halleffectAlarmStatus = currentHalleffectStatus;
+        g_wakeUpFromRtcCheckDataFlag = true;
+        previousHallEffectStatus = currentHalleffectStatus;
+    }
+
+    _BATTERY_COVER_HALL_POWER(0);
+    _TOP_COVER_HALL_POWER(0);
+    UsrSleepGpioOutPins(BATTERY_COVER_HALL_SWITCH_OUT_INT_GPIO_Port, BATTERY_COVER_HALL_SWITCH_OUT_INT_Pin | TOP_COVER_HALL_SWITCH_OUT_INT_Pin, GPIO_PIN_RESET);
+    g_UsrSensorHallEffectSensorInitialFlag = false;
+    
+    if(g_wakeUpFromRtcCheckDataFlag)
+    {
+        g_wakeUpFromRtcCheckDataFlag = false;
+        UsrProcessGsmModuleOpenProcess();
+    }
+
+    // Her okuma yapıldıktan sonra uyku moduna çekildi.
+}
+
+// 23.11.2023
+// usr_sensor.c dosyası
+
+void UsrSensorGetValues(void)
+{ 
+    if((g_sNvsDeviceInfo.deviceStatus && !g_UsrSystemDeviceStatusCheckMissionFlag) || g_UsrProcessFirstRunFlag)
+    {
+        uint32_t currentTime = UL_RtcGetTs();
+        if((currentTime - g_UsrSystemSensorsRoutineReadingTime) >= (g_UsrSystemSensorsIntervalTime-1))
+        {
+            g_UsrSystemSensorsRoutineReadingTime = currentTime;
+            
+            bool sensorReadAccWakeUp = false;
+            #ifdef _accModuleCompile
+            if(g_accelometerWakeUpFlag)
+            {
+                sensorReadAccWakeUp = true;
+            }
+            #endif
+            
+            if(sensorReadAccWakeUp || g_UsrProcessFirstRunFlag)  
+            {  
+                #ifdef _accModuleCompile
+                g_accelometerWakeUpFlag = false;
+                #endif
+                g_UsrProcessFirstRunFlag = false;
+                
+                AdcSensorsInitialProc();
+                UltrasonicSensorInitialProc();
+                UsrSensorHallEffectGivePower();
+
+                if(g_UsrSystemAdcSensorInitialFlag)
+                {
+                    if(UL_AdcGetValues(&g_sAdcParameters, &g_sAdcRawParameters))
+                    {
+                        g_sAllSensorValues.adcDataOkFlag = true;
+                        m_BatteryVolt = CalculateBatteryVoltageProc();
+                    }
+                }
+
+                if(g_ultrasonicSensorInitialFlag)
+                {
+                    g_sAllSensorValues.distanceDataOkFlag = true;
+                }
+
+                if(g_UsrSensorHallEffectSensorInitialFlag) 
+                {
+                    UsrSensorHallEffectPinStatus();                 /// struct'a yazma iceride yapildi, isi bittikten sonra iceride kapatildi,
+                }
+
+                if(g_sAllSensorValues.adcDataOkFlag)
+                {
+                    m_NtcTemp = CalculateNtcTempValueProc();
+                    m_batteryVoltagePercentage = CalculateBatteryVoltagePercentageProc(m_BatteryVolt);
+                    g_FillStructFlag = true;
+                }
+
+                if(g_sAllSensorValues.distanceDataOkFlag)
+                {
+                    m_UltrasonicDistance = CalculateDistanceSensorValueProc();
+                    g_FillStructFlag = true;
+                }
+                
+                AllPeripheralDisableProc();             // once kapatsin
+
+                if(g_FillStructFlag)
+                {
+                    g_UsrSensorMeasurementFinish = 1;                         // go to usr_process.c
+                    g_sAllSensorValues.tempValue                = m_NtcTemp;             // bu civarda ufak degisikliklere dikkat, ayberk
+                    g_sAllSensorValues.batteryVoltage           = m_BatteryVolt;
+                    g_sAllSensorValues.batteryVoltagePercentage = m_batteryVoltagePercentage;
+                    g_sAllSensorValues.distanceValue            = m_UltrasonicDistance;
+                    g_FillStructFlag = false;  
+                    __logsi("temp: %.3f, charge: %.3f, distance: %d\n", g_sAllSensorValues.tempValue, g_sAllSensorValues.batteryVoltage, g_sAllSensorValues.distanceValue);
+                }
+            }
+        }
+    }
+}
+
