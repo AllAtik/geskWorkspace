@@ -1,6 +1,6 @@
 #include "usr_general.h"
 
-S_DEVICE_NVS_INFO g_sNvsDeviceInfo;
+S_DEVICE_NVS_INFO g_sNvsDeviceInfoooo;
 
 _io void CheckFactorySettingProc(void);
 _io void WriteDataToEepromProc(uint32_t f_add, uint8_t *f_p, uint16_t f_len);
