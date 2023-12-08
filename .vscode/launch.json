@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/eren1/Documents/GitHub/geskWorkspace/ApplicationLayer",
-      "program": "c:/Users/eren1/Documents/GitHub/geskWorkspace/ApplicationLayer/build/Debug/outDebug",
+      "cwd": "c:/Users/eren1/STM32CubeIDE/workspace_1.7.0/gsk-2401-workspace/ApplicationLayer",
+      "program": "c:/Users/eren1/STM32CubeIDE/workspace_1.7.0/gsk-2401-workspace/ApplicationLayer/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

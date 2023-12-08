@@ -58,6 +58,7 @@ void UsrSleepGeneral(void)
         HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
 
         g_dailyResetTimer += 10000;
+        
         UsrSystemWatchdogRefresh();
 
         #ifdef __usr_sleep_log
