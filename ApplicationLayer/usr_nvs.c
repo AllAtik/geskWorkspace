@@ -7,7 +7,7 @@ _io void WriteDataToEepromProc(uint32_t f_add, uint8_t *f_p, uint16_t f_len);
 _io void ReadDataToEepromProc(uint32_t f_add, uint8_t *f_pBuf, uint16_t f_len);
 _io uint8_t CalculateCrcProc(uint8_t *f_p, uint16_t f_len);
 
-uint8_t crcRes = 2;
+uint8_t crcRes = 3;
 
 void UsrNvsInitial(void)
 {
