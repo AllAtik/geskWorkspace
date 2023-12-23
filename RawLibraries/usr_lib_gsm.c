@@ -1,7 +1,11 @@
-#include "usr_general.h"
+#include "usr_lib_gsm.h"
 
-#define _c(x) ((const char *)x)
-#define _size(x) strlen((const char *)x)
+#ifdef _gsm_debug
+    #include "usr_lib_log.h"
+#endif
+
+#define _c(x)         ((const char *)x)
+#define _size(x)      strlen((const char *)x)
 #define LOCALPOSITION "UFS"
 
 _io bool ModuleSendCommandAndGetResponseProc(const char *f_pcCommand, const char *f_pcResponse, uint8_t f_tryCount, uint32_t f_timeout);
@@ -19,32 +23,38 @@ _io void MqttKeepaliveProc(void);
 _io int ModuleListenResultProc(const char *f_pRes, uint32_t f_timeout);
 _io int ModuleListenResultsProc(const char *f_pList, uint8_t f_totalNumber, uint32_t f_timeout);
 _io void ModuleResetProc(void);
-_io void SleepGsmGpioOutPins(GPIO_TypeDef *f_pGpio, uint16_t f_pinGroup, GPIO_PinState f_ePinstate);
+_io void SleepGsmGpioOutPinsProc(GPIO_TypeDef *f_pGpio, uint16_t f_pinGroup, GPIO_PinState f_ePinstate);
 
-_io S_GSM_PARAMETERS m_sGsmParameters;
+_io S_GSM_PARAMETERS                  m_sGsmParameters;
 // _io S_GSM_FTP                         m_sGsmFtpParameters;
-_io S_GSM_MQTT_PARAMETERS m_sGsmMqttParameters;
-_io S_GSM_MQTT_CONNECTION_PARAMETERS m_sGsmMqttConnectionParameters;
-// _io S_GSM_APN_PARAMETERS              m_sGsmApnParameters;
-_io S_GSM_MODULE_INFO m_sGsmModuleInfoParameters;
+_io S_GSM_MQTT_PARAMETERS             m_sGsmMqttParameters;
+_io S_GSM_MQTT_CONNECTION_PARAMETERS  m_sGsmMqttConnectionParameters;
+_io S_GSM_APN_PARAMETERS              m_sGsmApnParameters;
+_io S_GSM_MODULE_INFO                 m_sGsmModuleInfoParameters;
 
-#define _USR_GSM_UART_RAW_CHANNEL m_sGsmParameters.pUart->Instance
+#define _USR_GSM_UART_RAW_CHANNEL     m_sGsmParameters.pUart->Instance
 
-_io uint8_t m_receiveGsmBuf[_gsm_receive_buffer_size];     // esas deger _gsm_receive_buffer_size, 256 yaziliydi
-_io uint8_t m_receiveGsmEndBuf[_gsm_receive_buffer_size];  // esas deger _gsm_receive_buffer_size, 256 yaziliydi
-_io uint8_t m_transmitGsmBuf[_gsm_trasbuffer_buffer_size]; // esas deger _gsm_receive_buffer_size, 256 yaziliydi   // GSM'ye yolla
+_io uint8_t m_receiveGsmBuf[_gsm_receive_buffer_size];
+_io uint8_t m_receiveGsmEndBuf[_gsm_receive_buffer_size];  
+_io uint8_t m_transmitGsmBuf[256];                          // GSM'ye yolla, esas yazan: _gsm_trasbuffer_buffer_size yaziyordu  // 300 Eren yazdi
 _io uint8_t m_tcpGsmBuf[_gsm_receive_buffer_size];
+
+/* UL_GsmModuleMqttGeneral fonksiyonu icin kullanilan degiskenler */
+_io uint8_t m_mqttDataBuf[512];         // 128 ise yaramadi dikkat et,  256 yaziyordu
+char response[512];                     // UL_GsmModuleMqttGeneral()    400'e geri inebilir
+bool responseSubcribeDataCallbackFlag;  // UL_GsmModuleMqttGeneral();
 
 _io uint16_t m_receiveGsmUartCnt;
 _io uint16_t m_receiveGsmUartCnt;
 _io uint16_t m_tcpGsmUartCnt;
 _io int m_tcpCurrentLen = 0;
 
-_io bool m_eReceiveGsmDataCameOkFlg; // _io vardi
+_io bool m_eReceiveGsmDataCameOkFlg;
 _io bool m_eReceiveGsmDataCameFlg;
 
 _io bool m_eMqttConnectionOkFlg;
 _io uint32_t m_mqttKeepAliveTime = 0;
+
 
 void UL_GsmModuleInitial(S_GSM_PARAMETERS *f_pParam)
 {
@@ -54,16 +64,15 @@ void UL_GsmModuleInitial(S_GSM_PARAMETERS *f_pParam)
     m_sGsmParameters.pUart->Instance->CR3 |= ((uint32_t)0x00000001); ////FE , ORE , NF error
 
     HAL_UART_Abort_IT(m_sGsmParameters.pUart);
-    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, sizeof(m_receiveGsmBuf));   // // esas yazan: _gsm_receive_buffer_size
+    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, _gsm_receive_buffer_size);
 
-    HAL_GPIO_WritePin(m_sGsmParameters.pPowerkeyPort, m_sGsmParameters.powerKeyPin, (GPIO_PinState)m_sGsmParameters.powerKeyPinEnableStatus);
-    HAL_GPIO_WritePin(m_sGsmParameters.pPowerkeyPort, m_sGsmParameters.resetPin, (GPIO_PinState)m_sGsmParameters.powerPinEnableStatus);
+    HAL_GPIO_WritePin(m_sGsmParameters.pPowerkeyPort, m_sGsmParameters.powerKeyPin,      (GPIO_PinState)m_sGsmParameters.powerKeyPinEnableStatus);
+    HAL_GPIO_WritePin(m_sGsmParameters.pPowerkeyPort, m_sGsmParameters.resetPin,         (GPIO_PinState)m_sGsmParameters.powerPinEnableStatus);
     HAL_GPIO_WritePin(m_sGsmParameters.pPowerkeyPort, m_sGsmParameters.gsmProcessMcuPin, (GPIO_PinState)m_sGsmParameters.gsmProcessMcuStatus);
-    if (m_sGsmParameters.eModuleType != quectelM65GsmModule && m_sGsmParameters.eModuleType != quectelM66GsmModule)
-        HAL_GPIO_WritePin(m_sGsmParameters.pPowerkeyPort, m_sGsmParameters.resetPin, (GPIO_PinState)!m_sGsmParameters.resetPinEnableStatus);
 
     _gsm_delay(500);
 }
+
 
 void UL_GsmModuleDeInitial(void)
 {
@@ -72,10 +81,11 @@ void UL_GsmModuleDeInitial(void)
         HAL_UART_Abort_IT(m_sGsmParameters.pUart);
         HAL_UART_DeInit(m_sGsmParameters.pUart);
     }
-    HAL_GPIO_WritePin(m_sGsmParameters.pPowerPort, m_sGsmParameters.powerPin, (GPIO_PinState)!m_sGsmParameters.powerPinEnableStatus);
+    HAL_GPIO_WritePin(m_sGsmParameters.pPowerPort,    m_sGsmParameters.powerPin,    (GPIO_PinState)!m_sGsmParameters.powerPinEnableStatus);
     HAL_GPIO_WritePin(m_sGsmParameters.pPowerkeyPort, m_sGsmParameters.powerKeyPin, (GPIO_PinState)!m_sGsmParameters.powerKeyPinEnableStatus);
-    HAL_GPIO_WritePin(m_sGsmParameters.pResetPort, m_sGsmParameters.resetPin, (GPIO_PinState)!m_sGsmParameters.resetPinEnableStatus);
+    HAL_GPIO_WritePin(m_sGsmParameters.pResetPort,    m_sGsmParameters.resetPin,    (GPIO_PinState)!m_sGsmParameters.resetPinEnableStatus);
 }
+
 
 void UL_GsmModulePeripheral(EGsmPeripheral f_eControl)
 {
@@ -86,7 +96,7 @@ void UL_GsmModulePeripheral(EGsmPeripheral f_eControl)
         _USR_GSM_UART_RAW_CHANNEL->CR1 |= 0x00000010;
         _USR_GSM_UART_RAW_CHANNEL->CR3 |= 0x00000001;
         HAL_UART_AbortReceive_IT(&_USR_GSM_UART_CHANNEL);
-        HAL_UART_Receive_IT(&_USR_GSM_UART_CHANNEL, m_receiveGsmBuf, sizeof(m_receiveGsmBuf));  // esas yazan: _gsm_receive_buffer_size
+        HAL_UART_Receive_IT(&_USR_GSM_UART_CHANNEL, m_receiveGsmBuf, _gsm_receive_buffer_size);
         _USR_GSM_MAIN_POWER_CONTROL(f_eControl);
         _gsm_delay(1000);
         _USR_GSM_POWER_CONTROL(f_eControl);
@@ -101,13 +111,14 @@ void UL_GsmModulePeripheral(EGsmPeripheral f_eControl)
         _USR_GSM_POWER_CONTROL(f_eControl);
         _gsm_delay(250);
         _USR_GSM_POWERKEY_CONTROL(f_eControl);
-        SleepGsmGpioOutPins(GSM_RX_GPIO_Port,           GSM_RX_Pin,           GPIO_PIN_RESET);
-        SleepGsmGpioOutPins(GSM_TX_GPIO_Port,           GSM_TX_Pin,           GPIO_PIN_RESET);
-        SleepGsmGpioOutPins(SIM_DETECT_POWER_GPIO_Port, SIM_DETECT_POWER_Pin, GPIO_PIN_RESET);
-        SleepGsmGpioOutPins(SIM_DETECT_GPIO_Port,       SIM_DETECT_Pin,       GPIO_PIN_RESET);
+        SleepGsmGpioOutPinsProc(GSM_RX_GPIO_Port,           GSM_RX_Pin,           GPIO_PIN_RESET);
+        SleepGsmGpioOutPinsProc(GSM_TX_GPIO_Port,           GSM_TX_Pin,           GPIO_PIN_RESET);
+        SleepGsmGpioOutPinsProc(SIM_DETECT_POWER_GPIO_Port, SIM_DETECT_POWER_Pin, GPIO_PIN_RESET);
+        SleepGsmGpioOutPinsProc(SIM_DETECT_GPIO_Port,       SIM_DETECT_Pin,       GPIO_PIN_RESET);
     }
-    SleepGsmGpioOutPins(GSM_PROCESS_STATUS_MCU_GPIO_Port, GSM_PROCESS_STATUS_MCU_Pin, GPIO_PIN_RESET);
+    SleepGsmGpioOutPinsProc(GSM_PROCESS_STATUS_MCU_GPIO_Port, GSM_PROCESS_STATUS_MCU_Pin, GPIO_PIN_RESET);
 }
+
 
 bool UL_GsmModuleCheck(void)
 {
@@ -119,13 +130,18 @@ bool UL_GsmModuleCheck(void)
     return true;
 }
 
+
 bool UL_GsmModuleGetInfo(S_GSM_MODULE_INFO *f_pInfo)
 {
     m_sGsmModuleInfoParameters = *f_pInfo;
+
     int tryCount = 0;
 start_step:;
     if (++tryCount > 20)
     {
+        #ifdef _gsm_debug
+            __logsw("UL_GsmModuleGetInfo:Try limit error\n");
+        #endif
         return false;
     }
 
@@ -143,9 +159,7 @@ start_step:;
         }
     }
     else
-    {
         checkFlg = false;
-    }
 
     if (!checkFlg)
     {
@@ -154,62 +168,51 @@ start_step:;
     }
 
     checkFlg = false;
-    if (ModuleSendCommandAndGetResponseProc("ATI\r", "\r\nOK\r\n", 5, 3000))
+    if (ModuleSendCommandAndGetResponseProc("ATI\r", "\r\nOK\r\n", 5, 300))
     {
         const char *ptr = strstr(_c(m_receiveGsmEndBuf), "Revision");
         if (ptr != NULL)
         {
             memset((void *)f_pInfo->moduleInfoBuf, 0, 64);
             if (sscanf(_c(ptr), "Revision: %[^\r\n]", f_pInfo->moduleInfoBuf) == 1)
-            {
                 checkFlg = true;
-            }
         }
     }
     else
-    {
         checkFlg = false;
-    }
 
     if (!checkFlg)
         goto start_step;
 
     checkFlg = false;
-    if (ModuleSendCommandAndGetResponseProc("AT+CGSN\r", "\r\nOK\r\n", 5, 3000))
+    if (ModuleSendCommandAndGetResponseProc("AT+CGSN\r", "\r\nOK\r\n", 5, 300))
     {
         memset((void *)f_pInfo->imeiBuf, 0, 32);
         if (sscanf(_c(m_receiveGsmEndBuf), "\r\n%[^\r\n]", f_pInfo->imeiBuf) == 1)
-        {
             checkFlg = true;
-        }
     }
     else
-    {
         checkFlg = false;
-    }
 
     if (!checkFlg)
         goto start_step;
 
     checkFlg = false;
-    if (ModuleSendCommandAndGetResponseProc("AT+QCCID\r", "\r\nOK\r\n", 5, 3000))
+    if (ModuleSendCommandAndGetResponseProc("AT+QCCID\r", "\r\nOK\r\n", 5, 300))
     {
         memset((void *)f_pInfo->iccidBuf, 0, 32);
         if (sscanf(_c(m_receiveGsmEndBuf), "\r\n%[^\r\n]", f_pInfo->iccidBuf) == 1)
-        {
             checkFlg = true;
-        }
     }
     else
-    {
         checkFlg = false;
-    }
 
     if (!checkFlg)
         goto start_step;
 
     return true;
 }
+
 
 bool UL_GsmModuleMqttInitial(const S_GSM_MQTT_CONNECTION_PARAMETERS *f_pcParameter)
 {
@@ -219,9 +222,9 @@ bool UL_GsmModuleMqttInitial(const S_GSM_MQTT_CONNECTION_PARAMETERS *f_pcParamet
 start_step:;
     if (++tryCount > 20)
     {
-#ifdef _gsm_debug
-        __logsw("UL_GsmModuleMqttInitial:Try limit error\n");
-#endif
+        #ifdef _gsm_debug
+            __logsw("UL_GsmModuleMqttInitial:Try limit error\n");
+        #endif
         return false;
     }
 
@@ -232,9 +235,7 @@ start_step:;
         if (sscanf(_c(m_receiveGsmEndBuf), "%*[^:]: %d,%d%*[^\r\n]", &val1, &val2) == 2)
         {
             if (val2 == 1)
-            {
                 checkFlg = true;
-            }
         }
     }
     if (!checkFlg)
@@ -262,9 +263,9 @@ start_step:;
     second_step:;
         if (++tryCount > 20)
         {
-#ifdef _gsm_debug
-            __logsw("UL_GsmModuleMqttInitial:Second step try limit error\n");
-#endif
+            #ifdef _gsm_debug
+                __logsw("UL_GsmModuleMqttInitial:Second step try limit error\n");
+            #endif
             return false;
         }
 
@@ -285,9 +286,9 @@ start_step:;
             goto second_step;
         }
 
-#ifdef _gsm_debug
-        __logsw("UL_GsmModuleMqttInitial:Raw ip initial ok\n");
-#endif
+        #ifdef _gsm_debug
+            __logsw("UL_GsmModuleMqttInitial:Raw ip initial ok\n");
+        #endif
     }
 
     tryCount = 0;
@@ -314,6 +315,7 @@ third_step:;
             _gsm_delay(1000);
             goto third_step;
         }
+
         checkFlg = false;
         sprintf((char *)m_transmitGsmBuf, "AT+CIPSTART=\"TCP\",\"%s\",%d\r", f_pcParameter->sMqtt.urlBuf, f_pcParameter->sMqtt.port);
         if (ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 5, 5000))
@@ -340,6 +342,7 @@ third_step:;
     {
         sprintf((char *)m_transmitGsmBuf, "AT+CGDCONT=3,\"IP\",\"%s\"\r", f_pcParameter->sGsmApn.name);
         _gsm_watchdog(); // Eren yazdı
+
         if (!ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 5, 1000))
         {
             _gsm_delay(1000);
@@ -351,8 +354,20 @@ third_step:;
             _gsm_delay(1000);
             goto third_step;
         }
-
+        /*
+        if (!ModuleSendCommandAndGetResponseProc("AT+CGACT=?\r", "\r\nOK\r\n", 5, 1000))
+        {
+            _gsm_delay(1000);
+            goto third_step;
+        }
+        */
         if (!ModuleSendCommandAndGetResponseProc("AT+CGPADDR=1\r", "\r\nOK\r\n", 5, 1000))
+        {
+            _gsm_delay(1000);
+            goto third_step;
+        }
+        
+        if (!ModuleSendCommandAndGetResponseProc("AT+CGATT=1\r", "\r\nOK\r\n", 5, 1000))
         {
             _gsm_delay(1000);
             goto third_step;
@@ -380,7 +395,7 @@ third_step:;
             _gsm_delay(1000);
             goto third_step;
         }
-
+/*
         if (tcpConnectFlg)
         {
             if (!ModuleSendCommandAndGetResponseProc("AT+QICLOSE\r", "\r\nOK\r\n", 5, 3000))
@@ -390,7 +405,7 @@ third_step:;
             }
             tcpConnectFlg = false;
         }
-
+*/
         if (!ModuleSendCommandAndGetResponseProc("AT+QINDI=1\r", "\r\nOK\r\n", 5, 3000))
         {
             _gsm_delay(1000);
@@ -398,36 +413,35 @@ third_step:;
         }
 
         _gsm_watchdog(); // Eren yazdi
-        // memset((void *)m_transmitGsmBuf, 0, sizeof(m_transmitGsmBuf));   // Eren yazdi
-        sprintf((char *)m_transmitGsmBuf, "AT+QIOPEN=\"TCP\",\"%s\",%d\r", f_pcParameter->sMqtt.urlBuf, f_pcParameter->sMqtt.port);
 
+        sprintf((char *)m_transmitGsmBuf, "AT+QIOPEN=\"TCP\",\"%s\",%d\r", f_pcParameter->sMqtt.urlBuf, f_pcParameter->sMqtt.port);
         if (!ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 1, 120000))
         {
-#ifdef _gsm_debug
-            __logse("UL_GsmModuleMqttInitial:Tcp connection error step 1\n");
-#endif
+            #ifdef _gsm_debug
+                __logse("UL_GsmModuleMqttInitial:Tcp connection error step 1\n");
+            #endif
             return false;
         }
 
         // if (!ModuleListenResultProc("\r\n+QIOPEN: 0,0\r\n", 30000))
         if (!ModuleListenResultProc("CONNECT", 30000))
         {
-#ifdef _gsm_debug
-            __logse("UL_GsmModuleMqttInitial:Tcp connection error step 2\n");
-#endif
+            #ifdef _gsm_debug
+                __logse("UL_GsmModuleMqttInitial:Tcp connection error step 2\n");
+            #endif
             return false;
         }
     }
 
-#ifdef _gsm_debug
-    __logsi("UL_GsmModuleMqttInitial:Tcp connection ok\n");
-#endif
+    #ifdef _gsm_debug
+        __logsi("UL_GsmModuleMqttInitial:Tcp connection ok\n");
+    #endif
 
     if (!MqttConnectionProc(f_pcParameter))
     {
-#ifdef _gsm_debug
-        __logse("UL_GsmModuleMqttInitial:Mqtt connection error\n");
-#endif
+        #ifdef _gsm_debug
+            __logse("UL_GsmModuleMqttInitial:Mqtt connection error\n");
+        #endif
         return false;
     }
 
@@ -437,18 +451,19 @@ third_step:;
     return true;
 }
 
+
 bool UL_GsmModuleMqttSubcribeTopic(const char *f_cpTopic, int f_qos)
 {
     if (!m_eMqttConnectionOkFlg)
     {
-#ifdef _gsm_debug
-        __logsw("UL_GsmModuleMqttSubcribeTopic:Mqtt connection not ok\n");
-#endif
+        #ifdef _gsm_debug
+            __logsw("UL_GsmModuleMqttSubcribeTopic:Mqtt connection not ok\n");
+        #endif
         return false;
     }
 
     bool res = false;
-
+    
     uint8_t *ptr = (uint8_t *)_gsm_malloc(_gsm_mqtt_subcribe_buffer);
     if (ptr != NULL)
     {
@@ -476,9 +491,9 @@ bool UL_GsmModuleMqttSubcribeTopic(const char *f_cpTopic, int f_qos)
 
                     if (grantedQos != 0)
                     {
-#ifdef _gsm_debug
-                        __logsw("UL_GsmModuleMqttSubcribeTopic:Subcribe ack error\n");
-#endif
+                        #ifdef _gsm_debug
+                            __logsw("UL_GsmModuleMqttSubcribeTopic:Subcribe ack error\n");
+                        #endif
                         _gsm_free(ptr);
                         return false;
                     }
@@ -495,31 +510,41 @@ bool UL_GsmModuleMqttSubcribeTopic(const char *f_cpTopic, int f_qos)
     return res;
 }
 
+
 bool UL_GsmModuleMqttPublishTopic(const char *f_cpTopic, const char *f_cpData, int f_qos, int f_retain)
 {
     if (!m_eMqttConnectionOkFlg)
     {
-#ifdef _gsm_debug
-        __logsw("UL_GsmModuleMqttPublishTopic:Mqtt connection not ok\n");
-#endif
+        #ifdef _gsm_debug
+            __logsw("UL_GsmModuleMqttPublishTopic:Mqtt connection not ok\n");
+        #endif
         return false;
     }
-
+    
+    // Eren yazdi
+    memset((void *)m_mqttDataBuf, 0, _gsm_receive_buffer_size); 
     bool res = false;
-    uint8_t *ptr = (uint8_t *)_gsm_malloc(128);   // _gsm_mqtt_publish_buffer, 256 dene
+    MQTTString topicString = MQTTString_initializer;
+    topicString.cstring = (char *)f_cpTopic;
+    int len = MQTTSerialize_publish(m_mqttDataBuf, 512, 0, f_qos, 0, 0, topicString, (unsigned char *)f_cpData, _size(f_cpData)); // _gsm_mqtt_publish_buffer, 256 dene
+    if (TcpSendDataProc((const uint8_t *)m_mqttDataBuf, len))
+            res = true;
+    /*
+    bool res = false;
+    uint8_t *ptr = (uint8_t *)_gsm_malloc(256);   // _gsm_mqtt_publish_buffer, 256 dene
     if (ptr != NULL)
     {
         MQTTString topicString = MQTTString_initializer;
         topicString.cstring = (char *)f_cpTopic;
-        int len = MQTTSerialize_publish(ptr, 128, 0, f_qos, 0, 0, topicString, (unsigned char *)f_cpData, _size(f_cpData)); // _gsm_mqtt_publish_buffer, 256 dene
+        int len = MQTTSerialize_publish(ptr, 256, 0, f_qos, 0, 0, topicString, (unsigned char *)f_cpData, _size(f_cpData)); // _gsm_mqtt_publish_buffer, 256 dene
         if (TcpSendDataProc((const uint8_t *)ptr, len))
             res = true;
         _gsm_free(ptr);
     }
+    */
     return res;
 }
 
-_io uint8_t m_mqttDataBuf[_gsm_receive_buffer_size];
 
 void UL_GsmModuleMqttGeneral(void)
 {
@@ -537,40 +562,41 @@ void UL_GsmModuleMqttGeneral(void)
     if (m_tcpGsmUartCnt != 0)
     {
         /*
-        // uint8_t *ptr = (uint8_t *)_gsm_malloc(_gsm_receive_buffer_size);                       // 128 Eren yazdi,   // esas yazan deger _gsm_receive_buffer_size
-        // if (ptr != NULL)
-        // {                                                                                      // 128 den yukari reset yedi
-        //     memset((void *)ptr, 0, _gsm_receive_buffer_size);                                  // 128 Eren yazdi    // esas yazan deger _gsm_receive_buffer_size
-        //     if (MQTTPacket_read(ptr, _gsm_receive_buffer_size, TcpGetDataProc) == PUBLISH)     // 128 Eren yazdi    // esas yazan deger _gsm_receive_buffer_size
-        //     {
-        //         MQTTString received;
-        //         unsigned char dup;
-        //         int qos;
-        //         unsigned char retained;
-        //         unsigned short msgid;
-        //         int payloadLenIn;
-        //         unsigned char *payloadIn;
+        uint8_t *ptr = (uint8_t *)_gsm_malloc(_gsm_receive_buffer_size);                       
+        if (ptr != NULL)
+        {                                                                                      
+            memset((void *)ptr, 0, _gsm_receive_buffer_size);                                  
+            if (MQTTPacket_read(ptr, _gsm_receive_buffer_size, TcpGetDataProc) == PUBLISH)
+            {
+                MQTTString received;
+                unsigned char dup;
+                int qos;
+                unsigned char retained;
+                unsigned short msgid;
+                int payloadLenIn;
+                unsigned char *payloadIn;
 
-        //         int res = MQTTDeserialize_publish(&dup, &qos, &retained, &msgid, &received, &payloadIn, &payloadLenIn, ptr, _gsm_receive_buffer_size);
-        //         if (res == 1)
-        //         {
-        //             if (received.lenstring.len >= _gsm_mqtt_max_topic_size || payloadLenIn >= _gsm_mqtt_max_payoad_size)
-        //             {
-        //                 m_tcpCurrentLen = 0;
-        //                 m_tcpGsmUartCnt = 0;
-        //                 TcpGetStoredDataProc();
-        //                 _gsm_free(ptr);
-        //                 return;
-        //             }
-        //             _mqttCheckDataTimeout = HAL_GetTick();
-        //             UL_GsmModuleMqttSubcribeDataCallback(received.lenstring.data, received.lenstring.len, (const char*)payloadIn, payloadLenIn);
-        //         }
-        //     }
-        //     _gsm_free(ptr);
-        // }
+                int res = MQTTDeserialize_publish(&dup, &qos, &retained, &msgid, &received, &payloadIn, &payloadLenIn, ptr, _gsm_receive_buffer_size);
+                if (res == 1)
+                {
+                    if (received.lenstring.len >= _gsm_mqtt_max_topic_size || payloadLenIn >= _gsm_mqtt_max_payoad_size)
+                    {
+                        m_tcpCurrentLen = 0;
+                        m_tcpGsmUartCnt = 0;
+                        TcpGetStoredDataProc();
+                        _gsm_free(ptr);
+                        return;
+                    }
+                    _mqttCheckDataTimeout = HAL_GetTick();
+                    UL_GsmModuleMqttSubcribeDataCallback(received.lenstring.data, received.lenstring.len, (const char*)payloadIn, payloadLenIn);
+                }
+            }
+            _gsm_free(ptr);
+        }
         */
-        memset((void *)m_mqttDataBuf, 0, _gsm_receive_buffer_size);                              // 128 Eren yazdi    // esas yazan deger _gsm_receive_buffer_size
-        if (MQTTPacket_read(m_mqttDataBuf, _gsm_receive_buffer_size, TcpGetDataProc) == PUBLISH) // 128 Eren yazdi    // esas yazan deger _gsm_receive_buffer_size
+
+        memset((void *)m_mqttDataBuf, 0, _gsm_receive_buffer_size);                                 // _gsm_receive_buffer_size yaziyordu, sizeof(m_mqttDataBuf) Eren yazdi                         
+        if (MQTTPacket_read(m_mqttDataBuf, _gsm_receive_buffer_size, TcpGetDataProc) == PUBLISH)    // _gsm_receive_buffer_size yaziyordu, sizeof(m_mqttDataBuf) Eren yazdi
         {
             MQTTString received;
             unsigned char dup;
@@ -583,16 +609,28 @@ void UL_GsmModuleMqttGeneral(void)
             int res = MQTTDeserialize_publish(&dup, &qos, &retained, &msgid, &received, &payloadIn, &payloadLenIn, m_mqttDataBuf, _gsm_receive_buffer_size);
             if (res == 1)
             {
-                if (received.lenstring.len >= _gsm_mqtt_max_topic_size || payloadLenIn >= _gsm_mqtt_max_payoad_size)
+                if (received.lenstring.len >= _gsm_mqtt_max_topic_size || payloadLenIn >= _gsm_mqtt_max_payload_size)
                 {
                     m_tcpCurrentLen = 0;
                     m_tcpGsmUartCnt = 0;
                     TcpGetStoredDataProc();
-                    // _gsm_free(ptr);
                     return;
                 }
                 _mqttCheckDataTimeout = HAL_GetTick();
                 UL_GsmModuleMqttSubcribeDataCallback(received.lenstring.data, received.lenstring.len, (const char *)payloadIn, payloadLenIn);
+                
+                /* Bu asagi tarafi Eren yazdi */
+                
+                size_t responseLength = strlen(received.lenstring.data);
+                size_t destinationSize = sizeof(response);
+
+                if(responseLength < destinationSize)
+                {
+                    memcpy(response, received.lenstring.data, destinationSize);
+                    response[responseLength] = '\0';
+                    responseSubcribeDataCallbackFlag = true;
+                }
+                
             }
         }
     }
@@ -602,14 +640,11 @@ void UL_GsmModuleMqttGeneral(void)
 void UL_GsmModuleMqttClosed(void)
 {
     m_eMqttConnectionOkFlg = false;
+
     if (m_sGsmParameters.eModuleType == cavliGsmModules)
-    {
         ModuleSendCommandAndGetResponseProc("AT+CIPCLOSE\r", "OK", 3, 1000);
-    }
     else
-    {
         ModuleSendCommandAndGetResponseProc("AT+QICLOSE\r", "\r\nOK\r\n", 3, 1000);
-    }
 }
 
 
@@ -620,11 +655,9 @@ void UL_GsmModuleUartInterruptCallback(void)
     if (m_sGsmParameters.pUart->Instance->ISR & ((uint32_t)0x1f))
     {
         if ((m_sGsmParameters.pUart->Instance->ISR & 0x10) == 0)
-        {
-            HAL_UART_Receive_IT(m_sGsmParameters.pUart, (uint8_t *)m_receiveGsmBuf, sizeof(m_receiveGsmBuf));   // esas yazan: _gsm_receive_buffer_size
-        }
+            HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, _gsm_receive_buffer_size);   // esas yazan: _gsm_receive_buffer_size
         m_sGsmParameters.pUart->Instance->ICR |= 0x1f;
-        m_eReceiveGsmDataCameFlg = true; // Bu flag UartParserProc fonksiyonuna gidecek
+        m_eReceiveGsmDataCameFlg = true;                 // Bu flag UartParserProc fonksiyonuna gidecek
     }
 }
 
@@ -675,33 +708,18 @@ int UL_GsmModuleReadFile(const char *f_cpFileName, uint32_t f_startIndex, uint32
 #endif
     int val1, val2, val3, new_val1, new_val2;
 
-#ifdef _gsm_debug
-    __logsi("UL_GsmModuleReadFile:Read File  connection ok\n");
-#endif
+    #ifdef _gsm_debug
+        __logsi("UL_GsmModuleReadFile:Read File  connection ok\n");
+    #endif
 
     sprintf((char *)m_transmitGsmBuf, "AT+QFOPEN=\"%s\"\r", f_cpFileName);
     if (ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 2, 3000))
     {
         if (sscanf(_c(m_receiveGsmEndBuf), "%*[^:]: %d%*[^\r\n]", &val1) == 1)
-        {
             new_val1 = val1;
-        }
     }
 
-    // sprintf((char*)m_transmitGsmBuf, "AT+QFWRITE=%d,%d,10\r", new_val1, f_size);
-    // if(ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nCONNECT\r\n", 5, 3000))
-    // {
-    //     memset((void *)m_transmitGsmBuf, 0, sizeof(m_transmitGsmBuf));
-    //     memcpy((void *)m_transmitGsmBuf, (const void*)f_pData, sizeof(m_transmitGsmBuf));
-    //     if(!ModuleSendCommandWithLenAndGetResponseProc((const uint8_t*)m_transmitGsmBuf, strlen((const char*)m_transmitGsmBuf), "\r\nQFWRITE\r\n", 3, 1000))
-    //         // return false;
-
-    //     if(sscanf(_c(m_receiveGsmEndBuf), "%*[^:]: %d,%d%*[^\r\n]", &val2, &val3) == 2)
-    //     {
-    //         new_val2 = val3;
-    //     }
-    // }
-
+    
     memset((void *)m_transmitGsmBuf, 0, sizeof(m_transmitGsmBuf));
     sprintf((char *)m_transmitGsmBuf, "AT+QFSEEK=%d,%d,0\r", new_val1, f_startIndex);
     if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 5, 3000))
@@ -751,231 +769,9 @@ int UL_GsmModuleGetFileTotalLen(const char *f_cpFileName)
 
 bool UL_GsmModuleFtpFileDownload(const S_GSM_FTP *f_cpFtp)
 {
-#ifdef _4GGSM
-    int tryCount = 0;
-start_step:;
-    if (++tryCount > 20)
-    {
-        // #ifdef _gsm_debug
-        //         __logsw("UL_GsmModuleMqttInitial:Try limit error\n");
-        // #endif
-        return false;
-    }
-
-    if (!ModuleSendCommandAndGetResponseProc("AT+CEREG=0\r", "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    bool checkFlg = false;
-    if (ModuleSendCommandAndGetResponseProc("AT+CREG?\r", "\r\nOK\r\n", 5, 1000))
-    {
-        if (m_sGsmParameters.eModuleType == cavliGsmModules)
-        {
-            int val1, val2;
-            char buf1[16], buf2[16];
-            if (sscanf((const char *)m_receiveGsmEndBuf, "%*[^: ]: %d,%d,\"%[^\"]\",\"%[^\"][^\r\n]", &val1, &val2, buf1, buf2) == 4)
-            {
-                if (val2 == 1)
-                    checkFlg = true;
-            }
-        }
-    }
-
-    if (!checkFlg)
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    sprintf((char *)m_transmitGsmBuf, "AT+CGDCONT=2,\"IP\",\"%s\"\r", f_cpFtp->sGsmApn.name);
-    if (!ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    if (!ModuleSendCommandAndGetResponseProc("AT+CGACT=1,2\r", "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    sprintf(m_transmitGsmBuf, "AT^FTPOPEN=\"%s:%d\",\"%s\",\"%s\",1,180,0\r",
-            f_cpFtp->urlBuf, f_cpFtp->port, f_cpFtp->userNameBuf, f_cpFtp->userPasswordBuf);
-
-    if (!ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 2, 30000))
-        return false;
-
-    // #ifdef _gsm_debug
-    //     __logsw("UL_GsmModuleFtpFileDownload:Ftp connection ok\n");
-    // #endif
-
-    sprintf(m_transmitGsmBuf, "AT^FTPDLSET=\"%s%s\"\r", f_cpFtp->filePathBuf, f_cpFtp->fileNameBuf);
-    if (!ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 2, 5000))
-        return false;
-
-    int tryCnt = 0;
-try_step:;
-    if (++tryCnt > 5)
-        return false;
-
-    UL_GsmModuleDeleteFile((const char *)f_cpFtp->fileNameBuf);
-    // #ifdef _gsm_debug
-    //     __logsw("UL_GsmModuleFtpFileDownload:Ftp start donwload\n");
-    // #endif
-
-    bool downloadFlg = false;
-    ClearUartProc();
-    HAL_UART_Transmit(m_sGsmParameters.pUart, (const uint8_t *)"AT^FTPDL=1\r", strlen("AT^FTPDL=1\r"), 5 * strlen("AT^FTPDL=1\r"));
-    int timeout = HAL_GetTick();
-    int index = 0;
-    do
-    {
-        if ((HAL_GetTick() - timeout) > 30000)
-            goto try_step;
-
-        UartParserProc();
-        if (m_eReceiveGsmDataCameOkFlg)
-        {
-            if (strstr((const char *)m_receiveGsmEndBuf, "\r\n^FTPDL:2,0\r\n") != NULL)
-            {
-                if (index > 3)
-                    break;
-            }
-            else if (strstr((const char *)m_receiveGsmEndBuf, "\r\n^FTPDL") != NULL)
-            {
-                index++;
-                // #ifdef _gsm_debug
-                //                 __logsw("UL_GsmModuleFtpFileDownload:Ftp packed donwload : %d\n", index);
-                // #endif
-            }
-            m_receiveGsmUartCnt = 0;
-            m_eReceiveGsmDataCameOkFlg = false;
-        }
-    } while (!downloadFlg);
-
-    return true;
-
-#endif
-
-#ifdef GSM_2G_MODULES
-    m_sGsmFtpParameters = *f_cpFtp;
-
-    int tryCount = 0;
-start_step:;
-    if (++tryCount > 20)
-    {
-#ifdef _gsm_debug
-        __logsw("UL_GsmModuleMqttInitial:Try limit error\n");
-#endif
-        return false;
-    }
-
-    // _gsm_watchdog; // Eren yazdi
-    if (!ModuleSendCommandAndGetResponseProc("AT+CGREG=1\r", "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    bool checkFlg = false;
-    if (ModuleSendCommandAndGetResponseProc("AT+CREG?\r", "\r\nOK\r\n", 5, 1000))
-    {
-        int val1, val2;
-        if (sscanf(_c(m_receiveGsmEndBuf), "%*[^:]: %d,%d%*[^\r\n]", &val1, &val2) == 2)
-        {
-            if (val2 == 1)
-            {
-                checkFlg = true;
-            }
-        }
-    }
-
-    if (!checkFlg)
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    sprintf((char *)m_transmitGsmBuf, "AT+CGDCONT=3,\"IP\",\"%s\"\r", f_cpFtp->sGsmApn.name);
-    if (!ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    if (!ModuleSendCommandAndGetResponseProc("AT+CGACT=1,1\r", "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    memset((void *)m_transmitGsmBuf, 0, sizeof(m_transmitGsmBuf));
-    sprintf((char *)m_transmitGsmBuf, "AT+QFTPUSER=\"%s\"\r", f_cpFtp->userNameBuf);
-    if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    memset((void *)m_transmitGsmBuf, 0, sizeof(m_transmitGsmBuf));
-    sprintf((char *)m_transmitGsmBuf, "AT+QFTPPASS=\"%s\"\r", f_cpFtp->userPasswordBuf);
-    if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 5, 1000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    memset((void *)m_transmitGsmBuf, 0, sizeof(m_transmitGsmBuf));
-    sprintf((char *)m_transmitGsmBuf, "AT+QFTPOPEN=\"%s\",%d\r", f_cpFtp->urlBuf, f_cpFtp->port);
-    if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 2, 30000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-#ifdef _gsm_debug
-    __logsi("UL_GsmModuleFtpFileDownload:Ftp connection ok\n");
-#endif
-
-    sprintf((char *)m_transmitGsmBuf, "AT+QFTPCFG=4,\"/UFS/\"\r");
-    if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 5, 2000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    sprintf((char *)m_transmitGsmBuf, "AT+QFTPPATH=\"%s\"\r", f_cpFtp->filePathBuf);
-    if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 5, 2000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    // UL_GsmModuleDeleteFile((const char *)f_cpFtp->fileNameBuf);
-#ifdef _gsm_debug
-    __logsi("UL_GsmModuleFtpFileDownload:Ftp start donwload\n");
-#endif
-
-    sprintf((char *)m_transmitGsmBuf, "AT+QFTPCFG=4,\"/UFS/\"\r");
-    if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 5, 2000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    sprintf((char *)m_transmitGsmBuf, "AT+QFTPGET=\"%s\"\r", f_cpFtp->fileNameBuf);
-    if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "\r\nOK\r\n", 5, 2000))
-    {
-        _gsm_delay(1000);
-        goto start_step;
-    }
-
-    return true;
-#endif
+  return 0;
 }
+
 
 bool UL_GsmModuleDeleteFile(const char *f_cpFileName)
 {
@@ -989,6 +785,7 @@ bool UL_GsmModuleDeleteFile(const char *f_cpFileName)
     return ModuleSendCommandAndGetResponseProc((const char *)m_transmitGsmBuf, "\r\nOK\r\n", 5, 1000);
 }
 
+
 _io bool ModuleSendCommandAndGetResponseProc(const char *f_pcCommand, const char *f_pcResponse, uint8_t f_tryCount, uint32_t f_timeout)
 {
     bool res = false;
@@ -997,25 +794,25 @@ _io bool ModuleSendCommandAndGetResponseProc(const char *f_pcCommand, const char
 start_step:;
     if (++tryCount > f_tryCount)
     {
-#ifdef _gsm_debug
-        __logsw("ModuleSendCommandAndGetResponseProc:At command error : %s\n", f_pcCommand);
-#endif
+        #ifdef _gsm_debug
+            __logsw("ModuleSendCommandAndGetResponseProc:At command error : %s\n", f_pcCommand);
+        #endif
         return false;
     }
     // m_receiveGsmUartCnt = 0;    // Eren acti
     ClearUartProc();
     HAL_UART_Abort_IT(m_sGsmParameters.pUart);
-    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, sizeof(m_receiveGsmEndBuf));  // _gsm_receive_buffer_size
-#ifdef _gsm_debug
-    __logsw("ModuleSendCommandAndGetResponseProc:Transmit command [%d]: %s\n", strlen(f_pcCommand), f_pcCommand);
-#endif
+    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, _gsm_receive_buffer_size);  // esas yazan:_gsm_receive_buffer_size
+    #ifdef _gsm_debug
+        __logsw("ModuleSendCommandAndGetResponseProc:Transmit command [%d]: %s\n", strlen(f_pcCommand), f_pcCommand);
+    #endif
     m_eReceiveGsmDataCameOkFlg = false;
-#ifdef _gsm_debug
-    __logse("Command : %s", f_pcCommand);
-#endif
+    #ifdef _gsm_debug
+        __logse("Command : %s", f_pcCommand);
+    #endif
     HAL_UART_Transmit(m_sGsmParameters.pUart, (const uint8_t *)f_pcCommand, strlen(f_pcCommand), 5 * strlen(f_pcCommand));
-    HAL_UART_Receive_IT(m_sGsmParameters.pUart, (uint8_t *)m_receiveGsmEndBuf, sizeof(m_receiveGsmEndBuf));                // Eren yazdi !
-
+    //HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmEndBuf, sizeof(m_receiveGsmEndBuf));         // Eren yazdi
+    
     int timeout = HAL_GetTick();
     while ((HAL_GetTick() - timeout) < f_timeout)
     {
@@ -1030,17 +827,17 @@ start_step:;
             else if (strstr((const char *)m_receiveGsmEndBuf, "ERROR"))
             {
                 res = false;
+                // responseSubcribeDataCallbackFlag = false;    // Eren yazdi      
                 break;
             }
             m_eReceiveGsmDataCameOkFlg = false;
         }
     }
     if (!res)
-    {
         goto start_step;
-    }
     return res;
 }
+
 
 _io bool ModuleSendCommandWithLenAndGetResponseProc(const uint8_t *f_pcCommand, uint16_t f_len, const char *f_pcResponse, uint8_t f_tryCount, uint32_t f_timeout)
 {
@@ -1050,9 +847,9 @@ _io bool ModuleSendCommandWithLenAndGetResponseProc(const uint8_t *f_pcCommand, 
 start_step:;
     if (++tryCount > f_tryCount)
     {
-#ifdef _gsm_debug
-        __logsw("ModuleSendCommandWithLenAndGetResponseProc:At command error \n");
-#endif
+        #ifdef _gsm_debug
+            __logsw("ModuleSendCommandWithLenAndGetResponseProc:At command error \n");
+        #endif
         return false;
     }
     // m_receiveGsmUartCnt = 0;
@@ -1068,12 +865,11 @@ start_step:;
     while ((HAL_GetTick() - timeout) < f_timeout)
     {
         UartParserProc();
-
         if (m_eReceiveGsmDataCameOkFlg)
         {
-#ifdef _gsm_debug
-            __logsw("Recevive : %s", m_receiveGsmEndBuf);
-#endif
+            #ifdef _gsm_debug
+                __logsw("Recevive : %s", m_receiveGsmEndBuf);
+            #endif
             if (strstr((const char *)m_receiveGsmEndBuf, f_pcResponse))
             {
                 res = true;
@@ -1086,6 +882,7 @@ start_step:;
         goto start_step;
     return res;
 }
+
 
 _io bool MqttConnectionProc(const S_GSM_MQTT_CONNECTION_PARAMETERS *f_pcParameter)
 {
@@ -1108,9 +905,8 @@ _io bool MqttConnectionProc(const S_GSM_MQTT_CONNECTION_PARAMETERS *f_pcParamete
         while ((HAL_GetTick() - timeout) < 30000) 
         {
             if (TcpGetRawDataProc() == -1)
-            {
                 return false;
-            }
+    
             if (MQTTPacket_read(buf, 128, TcpGetDataProc) == CONNACK)
             {
                 unsigned char sessionResent, connack_rc;
@@ -1118,9 +914,9 @@ _io bool MqttConnectionProc(const S_GSM_MQTT_CONNECTION_PARAMETERS *f_pcParamete
 
                 if (res != 1 || connack_rc != 0)
                 {
-#ifdef _gsm_debug
-                    __logse("MqttConnectionProc:Mqtt connection ack error\n");
-#endif
+                    #ifdef _gsm_debug
+                        __logse("MqttConnectionProc:Mqtt connection ack error\n");
+                    #endif
                     return false;
                 }
                 else
@@ -1139,7 +935,7 @@ _io void ClearUartProc(void)
     m_receiveGsmUartCnt = 0;
     m_receiveGsmEndBuf[0] = '\0';
     HAL_UART_Abort_IT(m_sGsmParameters.pUart);
-    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, sizeof(m_receiveGsmBuf));   // _gsm_receive_buffer_size
+    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, _gsm_receive_buffer_size);   // _gsm_receive_buffer_size
 }
 
 
@@ -1147,29 +943,31 @@ _io void UartParserProc(void)
 {
     if (m_eReceiveGsmDataCameFlg)
     {
+        _gsm_watchdog(); // Eren yazdi
         int currentUartCount = m_sGsmParameters.pUart->RxXferSize - m_sGsmParameters.pUart->RxXferCount;
 
         if ((m_receiveGsmUartCnt + currentUartCount) >= _gsm_receive_buffer_size)
         {
             m_receiveGsmUartCnt = 0;
-#ifdef _gsm_debug
-            __logsw("UartParserProc: Clear counter : %d-%d\n", m_receiveGsmUartCnt, currentUartCount);
-#endif
+            #ifdef _gsm_debug
+                __logsw("UartParserProc: Clear counter : %d-%d\n", m_receiveGsmUartCnt, currentUartCount);
+            #endif
             goto end_step;
         }
         memcpy((void *)&m_receiveGsmEndBuf[m_receiveGsmUartCnt], (const void *)m_receiveGsmBuf, currentUartCount);
         m_receiveGsmUartCnt += currentUartCount;
-        m_receiveGsmEndBuf[m_receiveGsmUartCnt] = 0; // Null ile sonlandır.
-#ifdef _gsm_debug
-        __logsw("Coming data : %s", m_receiveGsmEndBuf);
-#endif
+        m_receiveGsmEndBuf[m_receiveGsmUartCnt] = 0;               // Null ile sonlandır.
+        #ifdef _gsm_debug
+            __logsw("Coming data : %s", m_receiveGsmEndBuf);
+        #endif
         m_eReceiveGsmDataCameOkFlg = true;
     end_step:;
         HAL_UART_Abort_IT(m_sGsmParameters.pUart);
-        HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, sizeof(m_receiveGsmBuf));  // esas yazan: _gsm_receive_buffer_size //
+        HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, _gsm_receive_buffer_size);  // esas yazan: _gsm_receive_buffer_size //
         m_eReceiveGsmDataCameFlg = false;
     }
 }
+
 
 _io bool TcpSendDataProc(const uint8_t *f_pData, uint16_t f_len)
 {
@@ -1184,13 +982,14 @@ _io bool TcpSendDataProc(const uint8_t *f_pData, uint16_t f_len)
     m_transmitGsmBuf[f_len] = 0x1a;
     if (!ModuleSendCommandWithLenAndGetResponseProc((const uint8_t *)m_transmitGsmBuf, f_len + 1, "SEND OK", 1, 5000))
     {
-#ifdef _gsm_debug
-        __logse("usr_lib_gsm: TcpSendDataProc: send data error \n");
-#endif
+        #ifdef _gsm_debug
+            __logse("usr_lib_gsm: TcpSendDataProc: send data error \n");
+        #endif
         return false;
     }
     return true;
 }
+
 
 _io int TcpGetRawDataProc(void)
 {
@@ -1233,6 +1032,7 @@ _io int TcpGetRawDataProc(void)
     return 0;
 }
 
+
 _io int TcpGetDataProc(unsigned char *f_pData, int f_len)
 {
     uint8_t *ptr = (uint8_t *)f_pData;
@@ -1258,9 +1058,10 @@ _io int TcpGetDataProc(unsigned char *f_pData, int f_len)
     return r;
 }
 
+
 _io void TcpGetStoredDataTriggerReadProc(uint32_t *f_pTimerCnt)
 {
-    if ((HAL_GetTick() - *f_pTimerCnt) > (m_sGsmMqttParameters.keepAlive / 2))    // (m_sGsmMqttParameters.keepAlive / 2)
+    if ((HAL_GetTick() - *f_pTimerCnt) > (m_sGsmMqttConnectionParameters.sMqtt.keepAlive / 2))    // (m_sGsmMqttParameters.keepAlive / 2)   // eskiden: 30000 yaziyordu
     {
         *f_pTimerCnt = HAL_GetTick();
         TcpConnectionStatus();
@@ -1268,6 +1069,7 @@ _io void TcpGetStoredDataTriggerReadProc(uint32_t *f_pTimerCnt)
         m_receiveGsmUartCnt = 0;
     }
 }
+
 
 _io void TcpGetStoredDataProc(void)
 {
@@ -1281,6 +1083,9 @@ _io void TcpGetStoredDataProc(void)
     }
     else
     {
+        /* 4 satiri Eren yazdi */ 
+        memset((void*)m_receiveGsmEndBuf, 0, _gsm_receive_buffer_size); // 
+        memset((void*)m_transmitGsmBuf, 0, sizeof(m_transmitGsmBuf)); // 
         sprintf((char *)m_transmitGsmBuf, "AT+QIRD=0,1,0,1500\r");
         if (!ModuleSendCommandAndGetResponseProc(_c(m_transmitGsmBuf), "+QIRD:", 5, 3000))
             return;
@@ -1350,7 +1155,7 @@ _io void TcpGetStoredDataProc(void)
                     }
 
                     for (int i = 0; i < val; i++)
-                        m_tcpGsmBuf[m_tcpGsmUartCnt + i] = ptr[i];
+                      m_tcpGsmBuf[m_tcpGsmUartCnt + i] = ptr[i];
                     m_tcpGsmUartCnt += val;
                 }
                 else
@@ -1368,6 +1173,7 @@ _io void TcpGetStoredDataProc(void)
     }
 }
 
+
 _io void TcpConnectionStatus(void)
 {
     _io uint8_t _connectionCheckCnt = 0;
@@ -1375,9 +1181,9 @@ _io void TcpConnectionStatus(void)
     if (!m_eMqttConnectionOkFlg)
         return;
 
-    if (_connectionCheckCnt > 10)     // Eren yazdi burada yazan orjinal değer: 10 //
+    if (_connectionCheckCnt > 10)     // esas deger: 10 // ara ara degistirdim
     {
-        _connectionCheckCnt = 0;
+        _connectionCheckCnt = 0;      // Mqtt yi bitiren kisim
         m_eMqttConnectionOkFlg = false;
         UL_GsmModuleMqttConnectionStatusCallback(disconnectGsmMqttConnectionStatus);
         return;
@@ -1412,9 +1218,14 @@ _io void TcpConnectionStatus(void)
         if (!ModuleSendCommandAndGetResponseProc((const char *)"AT+QISTAT\r", "\r\nOK\r\n", 3, 1000))
         {
             ++_connectionCheckCnt;
+            #ifdef _gsm_debug
+                __logsi("STATE ERROR !");
+            #endif
             return;
         }
 
+        /*
+        // Burada response olarak STATE OK vb. bir sey geliyor, TCP ile alakali bi sey yok
         char *ptr = strstr((const char *)m_receiveGsmEndBuf, "TCP");
         if (ptr != NULL)
         {
@@ -1436,10 +1247,13 @@ _io void TcpConnectionStatus(void)
                 }
             }
         }
-
-        ++_connectionCheckCnt;
+        
+        // Bunu Eren yoruma aldı
+        // ++_connectionCheckCnt;
+        */
     }
 }
+
 
 _io int ModuleListenResultsProc(const char *f_pList, uint8_t f_totalNumber, uint32_t f_timeout)
 {
@@ -1451,7 +1265,6 @@ _io int ModuleListenResultsProc(const char *f_pList, uint8_t f_totalNumber, uint
     while ((HAL_GetTick() - timeout) < f_timeout)
     {
         UartParserProc();
-
         if (m_eReceiveGsmDataCameOkFlg)
         {
             for (uint8_t i = 0; i < f_totalNumber; i++)
@@ -1462,20 +1275,19 @@ _io int ModuleListenResultsProc(const char *f_pList, uint8_t f_totalNumber, uint
             m_eReceiveGsmDataCameOkFlg = false;
         }
     }
-
     return -1;
 }
+
 
 _io int ModuleListenResultProc(const char *f_pRes, uint32_t f_timeout)
 {
     m_receiveGsmUartCnt = 0;
     HAL_UART_Abort_IT(m_sGsmParameters.pUart);
-    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, sizeof(m_receiveGsmBuf)); // _gsm_receive_buffer_size
+    HAL_UART_Receive_IT(m_sGsmParameters.pUart, m_receiveGsmBuf, _gsm_receive_buffer_size); // _gsm_receive_buffer_size
     int timeout = HAL_GetTick();
     while ((HAL_GetTick() - timeout) < f_timeout)
     {
         UartParserProc();
-
         if (m_eReceiveGsmDataCameOkFlg)
         {
             if (strstr((const char *)m_receiveGsmEndBuf, (const char *)f_pRes))
@@ -1485,6 +1297,7 @@ _io int ModuleListenResultProc(const char *f_pRes, uint32_t f_timeout)
     }
     return false;
 }
+
 
 _io void MqttKeepaliveProc(void)
 {
@@ -1496,6 +1309,7 @@ _io void MqttKeepaliveProc(void)
     _mqttKeepAliveTimer = HAL_GetTick();
     UL_GsmModuleMqttPublishTopic("keepalive", "a", 0, 0);
 }
+
 
 _io void ModuleResetProc(void)
 {
@@ -1517,12 +1331,14 @@ _io void ModuleResetProc(void)
     }
 }
 
+
 __attribute__((weak)) void UL_GsmModuleMqttConnectionStatusCallback(EGsmMqttConnectionStatus f_eStatus)
 {
 #ifdef _gsm_debug
     __logsw("UL_GsmModulePPPMqttConnectionStatusCallback:Mqtt connection status : %d\n", f_eStatus);
 #endif
 }
+
 
 __attribute__((weak)) void UL_GsmModuleMqttSubcribeDataCallback(const char *f_pTopic, uint16_t f_topicLen, const char *f_pPayload, uint16_t f_payloadLen)
 {
@@ -1532,7 +1348,8 @@ __attribute__((weak)) void UL_GsmModuleMqttSubcribeDataCallback(const char *f_pT
 #endif
 }
 
-void SleepGsmGpioOutPins(GPIO_TypeDef *f_pGpio, uint16_t f_pinGroup, GPIO_PinState f_ePinstate)
+
+_io void SleepGsmGpioOutPinsProc(GPIO_TypeDef *f_pGpio, uint16_t f_pinGroup, GPIO_PinState f_ePinstate)
 {
     GPIO_InitTypeDef GPIO_InitStruct;
 

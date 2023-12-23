@@ -41,8 +41,8 @@ void UL_AdcPeripheral(EAdcControl f_eControl)
         HAL_ADC_DeInit(&_USR_ADC_CHANNEL);
         
         SleepGpioOutPinsProc(VBAT_ADC_HIGH_GPIO_Port, VBAT_ADC_HIGH_Pin, GPIO_PIN_SET);
-        SleepAdcPinsProc(VBAT_ADC_LOW_GPIO_Port,  VBAT_ADC_LOW_Pin,  GPIO_PIN_SET);
-        SleepAdcPinsProc(TEMP_ADC_GPIO_Port,      TEMP_ADC_Pin,      GPIO_PIN_RESET);
+        SleepAdcPinsProc(VBAT_ADC_LOW_GPIO_Port, VBAT_ADC_LOW_Pin, GPIO_PIN_SET);
+        SleepAdcPinsProc(TEMP_ADC_GPIO_Port, TEMP_ADC_Pin, GPIO_PIN_RESET);
         /*
         SleepGpioOutPinsProc(VBAT_ADC_HIGH_GPIO_Port, VBAT_ADC_HIGH_Pin, GPIO_PIN_SET);
         SleepAdcPinsProc(VBAT_ADC_LOW_GPIO_Port,      VBAT_ADC_LOW_Pin,  GPIO_PIN_RESET);
@@ -70,10 +70,6 @@ bool UL_AdcGetValues(S_ADC_PARAMETERS *f_pParameter, S_ADC_RAW_PARAMETERS *f_pDa
     {
         *f_pParameter = m_sAdcParameters;
         *f_pData      = m_sAdcRawParameters;
-
-        // m_sAdcParameters = *f_pParameter;
-        // m_sAdcRawParameters = *f_pData;
-
     }
 
     m_adcFinishedFlag = false;
@@ -119,7 +115,6 @@ bool UL_AdcGetValues(S_ADC_PARAMETERS *f_pParameter, S_ADC_RAW_PARAMETERS *f_pDa
     else
     {
         HAL_ADC_Stop_DMA(m_sAdcParameters.pAdcforDma);
-        UL_AdcPeripheral(disableAdcPeripheral);
         return false;        
     }
 }

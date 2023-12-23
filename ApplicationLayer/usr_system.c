@@ -2,46 +2,41 @@
 
 _io void AllPeripheralFirstParametersProc(void);
 #ifdef _accModuleCompile
-    _io void AccelInitialProc(void);
+    _io bool AccelInitialProc(void);
+    extern bool g_accStatusFlag;
 #endif
 _io void AllPeripheralDisableProc(void);
 _io void PreProcessorProc(void);
 
+ 
 S_GSM_PARAMETERS                 g_sGsmParameters;
 S_GSM_MODULE_INFO                g_sGsmModuleInfo;
 S_GSM_MQTT_CONNECTION_PARAMETERS g_sGsmMqttInitialParameters;
-S_GSM_FTP                        g_sGsmFtpParameters;
+// S_GSM_FTP                        g_sGsmFtpParameters;
 S_ADC_PARAMETERS                 g_sAdcParameters;
 S_ADC_RAW_PARAMETERS             g_sAdcRawParameters;
 S_BATTERY_DATA                   g_sBatteryParameters;
 S_NTC_PARAMETERS                 g_sNtcParameters;
 S_HALLEFFECT_PARAMETERS          g_sHalleffectParameters;
 S_ULTRASONIC_SENSOR_PARAMETERS   g_sUltrasonicParameters;
-S_TIMEDATE                       g_sTimeParameters;
+// S_TIMEDATE                       g_sTimeParameters;
 S_LED_PARAMETERS                 g_sLedParameters;
-
 #ifdef _accModuleCompile
-    S_ACC_PARAMETERS                 g_sAccelParameters;
-
-    // Accelometer flags
-    bool g_accelometerWakeUpFlag = false;            // harbiden uyandı flag'i
-    bool g_accelometerInterruptDetectedFlag = false;
-    bool g_accStatusFlag;
+    S_ACC_PARAMETERS                 g_sAccelParameters;  
 #endif
-
 // Gsm Flags
-bool g_gsmModuleInitialFlag = false;
+bool g_gsmModuleInitialFlag     = false;
 bool g_gsmModuleMqttInitialFlag = false;
-bool g_gsmErrorFlag = false;
+bool g_gsmErrorFlag             = false;
 
-// Rtc WakeUp Flag
-bool g_wakeUpRtcCheckDataFlag = false;
-bool g_wakeUpFromRtcCheckDataFlag = false;
+bool g_wakeUpRtcCheckDataFlag   = false;
 
 uint32_t g_dataSendTs;
 bool g_fireAlarmFlag;
-uint32_t g_dailyResetTimer;
-uint32_t g_packageEventBits;    // enum yerine geçen değişken
+uint32_t g_packageEventBits;                                // enum yerine geçen değişken
+uint16_t g_subcribeDataCallbackCounter;                     // UL_GsmModuleMqttSubcribeDataCallback içinde olan bir degisken
+uint32_t g_dailyResetTimer;                                 // İki degisken de interrupt icerisinde
+uint32_t g_waitResponseCount;
 
 void UsrSystemInitial(void)
 {
@@ -63,7 +58,7 @@ void UsrSystemInitial(void)
 
 void UsrSystemGeneral(void)
 {
-    UsrSystemWatchdogRefresh();      // Clean watchdog
+    UsrSystemWatchdogRefresh();                             // Clean watchdog
 #ifdef _accModuleCompile
     UsrSystemAccelometerGeneral();
 #endif
@@ -75,13 +70,18 @@ void UsrSystemGeneral(void)
 
 void UL_GsmModuleMqttSubcribeDataCallback(const char *f_pTopic, uint16_t f_topicLen, const char *f_pPayload, uint16_t f_payloadLen)
 {
-    __logsw("Topic: %s Data: %s", f_pTopic, f_pPayload);
+    #ifdef __usr_system_log
+        __logsw("UL_GsmModuleMqttSubcribeDataCallback:  Topic: %.*s  Payload: %.*s\n", f_topicLen, f_pTopic, f_payloadLen, f_pPayload);
+    #endif
+    g_subcribeDataCallbackCounter++;  // Sadece kac defa parse yapacagimizi gosterir.
 }
 
 
 void UL_GsmModuleMqttConnectionStatusCallback(EGsmMqttConnectionStatus f_eStatus)
 {
-    __logsw("Connection status : %d", f_eStatus);
+    #ifdef __usr_system_log
+        __logsw("Connection status : %d", f_eStatus);
+    #endif
 }
 
 
@@ -121,11 +121,11 @@ void UsrSystemAccelometerGeneral(void)
             AccelInitialProc();
         }
     }
-    UL_AccelometerClearFlag();
+    // UL_AccelometerClearFlag(); //..
 }
 
 
-_io void AccelInitialProc(void)
+_io bool AccelInitialProc(void)
 {
     g_accStatusFlag = UL_AccelCheckChip();
     if (g_accStatusFlag)
@@ -141,10 +141,9 @@ _io void AllPeripheralDisableProc(void)
     UL_NtcPeripheral(disableNtcPeripheral);
     UL_UltrasonicSensorPeripheral(disableUltrasonicSensor);
     UL_GsmModulePeripheral(disableGsmPeripheral);
-    // UL_LedPeripheral(disableLedPeripheral);
+    UL_LedPeripheral(disableLedPeripheral);
     UL_LedAllDisable();
     UL_HalleffectPeripheral(disableHalleffectPeripheral);
-    
 }
 
 _io void AllPeripheralFirstParametersProc(void)
@@ -203,16 +202,28 @@ _io void AllPeripheralFirstParametersProc(void)
 
     g_sGsmMqttInitialParameters.sMqtt.port                           = 39039;
     g_sGsmMqttInitialParameters.sMqtt.keepAlive                      = 30;
-    g_sGsmFtpParameters.port                                         = 21;
+    // g_sGsmFtpParameters.port                                         = 21;
     sprintf(g_sGsmMqttInitialParameters.sGsmApn.name,                "internet");
     sprintf(g_sGsmMqttInitialParameters.sMqtt.urlBuf,                "95.70.201.96");
     sprintf(g_sGsmMqttInitialParameters.sMqtt.randomIdBuf, "%s-gesk", g_sGsmModuleInfo.imeiBuf);
-    sprintf(g_sGsmFtpParameters.sGsmApn.name,                        "internet");
-    sprintf(g_sGsmFtpParameters.userNameBuf,                         "larryftp");
-    sprintf(g_sGsmFtpParameters.userPasswordBuf,                     "gesk2017");
-    sprintf(g_sGsmFtpParameters.urlBuf,                              "159.65.112.154");
-    sprintf(g_sGsmFtpParameters.fileNameBuf,                         "test.txt");
-    sprintf(g_sGsmFtpParameters.filePathBuf,                         "/");
+    // sprintf(g_sGsmFtpParameters.sGsmApn.name,                        "internet");
+    // sprintf(g_sGsmFtpParameters.userNameBuf,                         "larryftp");
+    // sprintf(g_sGsmFtpParameters.userPasswordBuf,                     "gesk2017");
+    // sprintf(g_sGsmFtpParameters.urlBuf,                              "159.65.112.154");
+    // sprintf(g_sGsmFtpParameters.fileNameBuf,                         "test.txt");
+    // sprintf(g_sGsmFtpParameters.filePathBuf,                         "/");
+
+    memset(g_sGetData.version,        '\0', sizeof(g_sGetData.version));
+    memset(g_sGetData.link,           '\0', sizeof(g_sGetData.link));
+    g_sGetData.ts                    = 0;
+    g_sGetData.interval              = g_sNvsDeviceInfo.sendingDataInterval;
+    g_sGetData.fullAlarmLimit        = g_sNvsDeviceInfo.fullAlarmLimit;
+    g_sGetData.deviceStatus          = g_sNvsDeviceInfo.deviceStatus;
+    g_sGetData.deviceStatusCheckTime = g_sNvsDeviceInfo.deviceStatusCheckTime;
+    g_sGetData.depthAlarmLimit       = g_sNvsDeviceInfo.depthAlarmLimit;
+    g_sGetData.fullnessAlarmLimit    = g_sNvsDeviceInfo.fullnessAlarmLimit ;
+    g_sGetData.toleranceValue        = g_sNvsDeviceInfo.toleranceValue;
+    g_sGetData.sensorWakeUp          = g_sNvsDeviceInfo.sensorWakeUpTime;
 
 #ifdef _accModuleCompile
     g_sAccelParameters.accelPowerPort                                = ACC_POWER_GPIO_Port;
@@ -235,10 +246,65 @@ _io void AllPeripheralFirstParametersProc(void)
 #endif
 }
 
+
+GPIO_TypeDef* g_emptyPinGpioPort[20] =
+{
+    _EMPTY_PINA0_GPIO_Port,
+    _EMPTY_PINA1_GPIO_Port,
+    _EMPTY_PINA7_GPIO_Port,
+    _EMPTY_PINA11_GPIO_Port,
+    _EMPTY_PINA15_GPIO_Port,
+    _EMPTY_PINB1_GPIO_Port,
+    _EMPTY_PINB5_GPIO_Port,
+    _EMPTY_PINB8_GPIO_Port,
+    _EMPTY_PINB9_GPIO_Port,
+    _EMPTY_PINC2_GPIO_Port,
+    _EMPTY_PINC3_GPIO_Port,
+    _EMPTY_PINC7_GPIO_Port,
+    _EMPTY_PINC8_GPIO_Port,
+    _EMPTY_PINC12_GPIO_Port,
+    _EMPTY_PINC13_GPIO_Port,
+    _EMPTY_PINC14_GPIO_Port,
+    _EMPTY_PINC15_GPIO_Port,
+    _EMPTY_PIND2_GPIO_Port,
+    _EMPTY_PINH0_GPIO_Port,
+    _EMPTY_PINH1_GPIO_Port,
+};
+
+
+_io const uint8_t g_emptyPinGpioPin[20] =
+{
+    _EMPTY_PINA0_Pin,
+    _EMPTY_PINA1_Pin,
+    _EMPTY_PINA7_Pin,
+    _EMPTY_PINA11_Pin,
+    _EMPTY_PINA15_Pin,
+    _EMPTY_PINB1_Pin,
+    _EMPTY_PINB5_Pin,
+    _EMPTY_PINB8_Pin,
+    _EMPTY_PINB9_Pin,
+    _EMPTY_PINC2_Pin,
+    _EMPTY_PINC3_Pin,
+    _EMPTY_PINC7_Pin,
+    _EMPTY_PINC8_Pin,
+    _EMPTY_PINC12_Pin,
+    _EMPTY_PINC13_Pin,
+    _EMPTY_PINC14_Pin,
+    _EMPTY_PINC15_Pin,
+    _EMPTY_PIND2_Pin,
+    _EMPTY_PINH0_Pin,
+    _EMPTY_PINH1_Pin, 
+};
+
+
 _io void PreProcessorProc(void)
 {
     HAL_Delay(500);
     #ifdef __usr_system_log 
-        __logsi("********* Main app was started version number : %s  ************", _version);
+        __logsi("********* Main app was started version number : %s  ************", _device_version);
     #endif
+
+    for(uint8_t i=0; i < 20; i++)
+        HAL_GPIO_WritePin(g_emptyPinGpioPort[i], g_emptyPinGpioPin[i], GPIO_PIN_RESET);
+    
 }

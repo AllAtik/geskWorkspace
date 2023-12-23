@@ -23,9 +23,9 @@
 
 if ($debugfile -eq "")
 {
-& "C:\Program Files\IAR Systems\Embedded Workbench 9.1\common\bin\cspybat" -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gsk-2401-workspace\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.general.xcl" --backend -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gsk-2401-workspace\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.driver.xcl" 
+& "C:\Program Files\IAR Systems\Embedded Workbench 9.1\common\bin\cspybat" -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gesk-projects-gsk-2401-workspace-7beff6f151bd\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.general.xcl" --backend -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gesk-projects-gsk-2401-workspace-7beff6f151bd\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.driver.xcl" 
 }
 else
 {
-& "C:\Program Files\IAR Systems\Embedded Workbench 9.1\common\bin\cspybat" -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gsk-2401-workspace\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.general.xcl" --debug_file=$debugfile --backend -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gsk-2401-workspace\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.driver.xcl" 
+& "C:\Program Files\IAR Systems\Embedded Workbench 9.1\common\bin\cspybat" -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gesk-projects-gsk-2401-workspace-7beff6f151bd\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.general.xcl" --debug_file=$debugfile --backend -f "C:\Users\eren1\STM32CubeIDE\workspace_1.7.0\gesk-projects-gsk-2401-workspace-7beff6f151bd\STM32-L051R8-M65-APP\EWARM\settings\STM32-L051R8-M65-APP.STM32-L051R8-M65-APP.driver.xcl" 
 }

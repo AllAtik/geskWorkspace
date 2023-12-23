@@ -111,13 +111,11 @@ void UL_NtcPeripheral(EControl f_eControl)
     {
       m_ntcPowerOkFlag = false;
       SleepNtcSensorGpioPinsProc(NTC_ACTIVE_GPIO_Port,      NTC_ACTIVE_Pin,      GPIO_PIN_RESET);
-      // SleepNtcSensorGpioPinsProc(TEMP_ADC_GPIO_Port,        TEMP_ADC_Pin,        GPIO_PIN_RESET);
     }
     else
     {
       m_ntcPowerOkFlag = true;
       WakeUpNtcSensorGpioPinsProc(NTC_ACTIVE_GPIO_Port,      NTC_ACTIVE_Pin,      GPIO_PIN_SET);
-      // WakeUpNtcSensorGpioPinsProc(TEMP_ADC_GPIO_Port,        TEMP_ADC_Pin,        GPIO_PIN_SET);
     }
 }
 

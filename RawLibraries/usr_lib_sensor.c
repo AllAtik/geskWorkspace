@@ -1,18 +1,16 @@
 #include "usr_lib_sensor.h"
 
-#define _io static
-#define _iov static volatile
-
 _io bool m_dataOkFlag;
 uint8_t m_globalRxBuffer[_USR_UART_TOTAL_BYTES];
 _io bool m_distanceOkFlag = false;
-// int m_distance = 0;
+
 _io S_ULTRASONIC_SENSOR_PARAMETERS m_sUltrasonicParameter;
 
 #define _USR_ULTRASONIC_SENSOR_RAW_CHANNEL      m_sUltrasonicParameter.pUart->Instance
 #define _USR_ULTRASONIC_SENSOR_POWER(x)         HAL_GPIO_WritePin(m_sUltrasonicParameter.pDistanceSensorOnOffPort, m_sUltrasonicParameter.sensorOnOffPin, (GPIO_PinState)x)
 
 _io void SleepSensorGpioPinsProc(GPIO_TypeDef *f_pGpio, uint16_t f_pinGroup, GPIO_PinState f_ePinstate);
+
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -89,6 +87,7 @@ int UL_UltrasonicSensorGetValue(uint32_t f_timeoutMilisecond)
     }
     return _USR_DISTANCE_SENSOR_ERROR_VALUE;
 }
+
 
 // uart datasinin interrupt altinda toplanmasini saglayan fonksiyon
 void UL_UltrasonicSensorCallback(void) // stm32l0xx_it.c dosyası

@@ -7,7 +7,7 @@ _io void WriteDataToEepromProc(uint32_t f_add, uint8_t *f_p, uint16_t f_len);
 _io void ReadDataToEepromProc(uint32_t f_add, uint8_t *f_pBuf, uint16_t f_len);
 _io uint8_t CalculateCrcProc(uint8_t *f_p, uint16_t f_len);
 
-uint8_t crcRes = 5;
+uint8_t crcRes = 0;
 
 void UsrNvsInitial(void)
 {
@@ -38,7 +38,6 @@ _io void CheckFactorySettingProc(void)
 {
     ReadDataToEepromProc(_USR_NVS_START_ADD, (uint8_t *)&g_sNvsDeviceInfo, sizeof(g_sNvsDeviceInfo));
     
-
     crcRes = CalculateCrcProc((uint8_t *)&g_sNvsDeviceInfo, sizeof(g_sNvsDeviceInfo) - 1);
 
     if ((g_sNvsDeviceInfo.eepromCheckValue != _USR_NVS_CHECKDATA) || (CalculateCrcProc((uint8_t *)&g_sNvsDeviceInfo, sizeof(g_sNvsDeviceInfo) - 1) != g_sNvsDeviceInfo.crc))

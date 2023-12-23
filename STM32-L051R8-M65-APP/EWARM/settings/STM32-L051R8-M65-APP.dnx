@@ -28,7 +28,7 @@
         <CStepIntDis>_ 0</CStepIntDis>
     </StLinkDriver>
     <DebugChecksum>
-        <Checksum>3985970919</Checksum>
+        <Checksum>1766410210</Checksum>
     </DebugChecksum>
     <Exceptions>
         <StopOnUncaught>_ 0</StopOnUncaught>
@@ -42,7 +42,7 @@
         <ShowSource>1</ShowSource>
     </Trace1>
     <CallStack>
-        <ShowArgs>0</ShowArgs>
+        <ShowArgs>1</ShowArgs>
     </CallStack>
     <struct_types>
         <Fmt0>S_DEVICE_NVS_INFO-crc	3	0</Fmt0>
@@ -59,9 +59,10 @@
     </struct_types>
     <watch_formats>
         <Fmt0>{W}42:fullnessLimitExdeed	3	0</Fmt0>
-        <Fmt1>{W}42:m_AlarmGroupBits	3	0</Fmt1>
-        <Fmt2>{W}42:m_batteryVoltagePercentage	3	0</Fmt2>
-        <Fmt3>{W}42:m_batteryVoltagepercetage	3	0</Fmt3>
+        <Fmt1>{W}42:g_PublishOkFlag	3	0</Fmt1>
+        <Fmt2>{W}42:m_AlarmGroupBits	3	0</Fmt2>
+        <Fmt3>{W}42:m_batteryVoltagePercentage	3	0</Fmt3>
+        <Fmt4>{W}42:m_batteryVoltagepercetage	3	0</Fmt4>
     </watch_formats>
     <Trace2>
         <Enabled>0</Enabled>
@@ -80,8 +81,9 @@
         <mode>0</mode>
     </DisassembleMode>
     <Breakpoints2>
-        <Bp0>_ 1 "EMUL_CODE" "{$PROJ_DIR$\..\..\ApplicationLayer\usr_sleep.c}.57.9" 0 0 1 "" 0 "" 0</Bp0>
-        <Count>1</Count>
+        <Bp0>_ 1 "EMUL_CODE" "{$PROJ_DIR$\..\Core\Src\stm32l0xx_it.c}.101.3" 0 0 1 "" 0 "" 0</Bp0>
+        <Bp1>_ 0 "EMUL_CODE" "{$PROJ_DIR$\..\..\RawLibraries\usr_lib_gsm.c}.1362.5" 0 0 1 "" 0 "" 0</Bp1>
+        <Count>2</Count>
     </Breakpoints2>
     <Aliases>
         <Count>0</Count>

@@ -56,7 +56,7 @@
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 #ifdef _accModuleCompile
-extern bool                         g_accelometerInterruptDetectedFlag;
+  extern bool                         g_accelometerInterruptDetectedFlag;
 #endif
 extern bool                         g_wakeUpFromRtcCheckDataFlag;
 extern bool                         g_wakeUpRtcCheckDataFlag;
@@ -172,19 +172,6 @@ void RTC_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles RCC global interrupt.
-  */
-void RCC_IRQHandler(void)
-{
-  /* USER CODE BEGIN RCC_IRQn 0 */
-
-  /* USER CODE END RCC_IRQn 0 */
-  /* USER CODE BEGIN RCC_IRQn 1 */
-
-  /* USER CODE END RCC_IRQn 1 */
-}
-
-/**
   * @brief This function handles EXTI line 2 and line 3 interrupts.
   */
 void EXTI2_3_IRQHandler(void)
@@ -289,6 +276,8 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   g_dailyResetTimer++;
+  g_waitResponseCount++;
+  
 }
 
 /* USER CODE END 1 */

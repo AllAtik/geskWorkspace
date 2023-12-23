@@ -7,12 +7,10 @@
 
 #ifndef _2G
     #define GSM2G
-    // #define _gsm_debug
 #endif
 
 #ifdef _4G
     #define GSM4G
-    #define _gsm_debug
 #endif
 
 

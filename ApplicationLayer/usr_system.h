@@ -4,11 +4,12 @@
 #include "usr_general.h"
 
 #define _USR_SYSTEM_BASE_TIMER_CHANNEL   htim6
-#define _USR_SYSTEM_TIMEOUT_TIME         (uint32_t)300000
+// #define _USR_SYSTEM_TIMEOUT_TIME         (uint32_t)300000
 #define _USR_SYSTEM_LOG_UART_CHANNEL     hlpuart1
 #define _USR_SYSTEM_ADC_CHANNEL          hadc
 #define _USR_SYSTEM_UART_1_CHANNEL       huart1
 #define _USR_SYSTEM_UART_2_CHANNEL       huart2
+#define _USR_SYSTEM_I2C_CHANNEL          hi2c2
 #define _USR_SYSTEM_DAILY_RESET_TIME     (24 * 60 * 60 * 1000)
 
 #define _USR_SYSTEM_EVENT_BITS_DEVICE_RESET        (1 << 0)
@@ -17,6 +18,7 @@
 #define _USR_SYSTEM_EVENT_BITS_FULL_ALARM          (1 << 3)
 #define _USR_SYSTEM_EVENT_BITS_FULLNESS_ALARM      (1 << 4)
 #define _USR_SYSTEM_EVENT_BITS_PERIODIC_DATA_SEND  (1 << 5)
+#define _USR_SYSTEM_EVENT_BITS_ACC_SHAKE_ALARM     (1 << 6)
 
 void UsrSystemInitial(void); 
 void UsrSystemGeneral(void);
@@ -33,6 +35,9 @@ extern uint32_t g_dataSendTs;
 extern bool g_fireAlarmFlag;
 extern uint32_t g_dailyResetTimer;
 extern uint32_t g_packageEventBits;
+extern uint32_t g_waitResponseCount;
+
+extern uint16_t g_subcribeDataCallbackCounter;
 
 #endif //__USR_SYSTEM_H
 

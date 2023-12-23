@@ -19,9 +19,11 @@
 #include "gpio.h"
 #include "stm32l0xx_hal.h"
 
-#define _version "v5.3"
+#define ACCELOMETER
 
-#ifndef ACCELOMETER
+#define _device_version "v5.3"
+
+#ifdef ACCELOMETER
   #define _subversion "1.4"
   #define _accModuleCompile
 #endif

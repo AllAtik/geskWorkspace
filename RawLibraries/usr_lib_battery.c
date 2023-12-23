@@ -26,16 +26,12 @@ void UL_BatteryPeripheral(EBatteryControl f_eControl)
     if(f_eControl == enableBatteryPeripheral)
     {
         m_batteryPowerOkFlag = true;
-        // UsrWakeUpSensorGpioPins(VBAT_ADC_HIGH_GPIO_Port, VBAT_ADC_HIGH_Pin, GPIO_PIN_SET);
-        // UsrWakeUpSensorGpioPins(VBAT_ADC_LOW_GPIO_Port,  VBAT_ADC_LOW_Pin,  GPIO_PIN_SET);
         WakeUpBatteryGpioPinsProc(VBAT_ADC_ON_OFF_GPIO_Port, VBAT_ADC_ON_OFF_Pin, GPIO_PIN_SET);
     }
     else
     {
         m_batteryPowerOkFlag = false; 
         SleepBatteryGpioPinsProc(VBAT_ADC_ON_OFF_GPIO_Port, VBAT_ADC_ON_OFF_Pin, GPIO_PIN_RESET);
-        // UsrSleepSensorGpioPins(VBAT_ADC_HIGH_GPIO_Port, VBAT_ADC_HIGH_Pin, GPIO_PIN_RESET);
-        // UsrSleepSensorGpioPins(VBAT_ADC_LOW_GPIO_Port,  VBAT_ADC_LOW_Pin,  GPIO_PIN_RESET);
     }
 }
 

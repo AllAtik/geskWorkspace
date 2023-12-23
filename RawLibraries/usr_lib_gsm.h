@@ -1,7 +1,7 @@
 #ifndef __USR_LIB_GSM_H
 #define __USR_LIB_GSM_H
 
-#include "usr_general.h"
+#include "usr_arch.h"
 
 #ifdef STM32_L051R8
     #include "main.h"
@@ -27,6 +27,7 @@
     #endif
 #endif // DEBUG
 
+
 #ifdef GSM4G
     #define _gsm_watchdog()                   HAL_IWDG_Refresh(&hiwdg)
     #ifdef _freertos
@@ -40,14 +41,14 @@
         #define _gsm_delay(x)                    HAL_Delay(x)
     #endif
 #endif
-
-#include "MQTTPacket.h"
+ 
+#include "MQTTPacket.h" 
 
 #define _gsm_receive_buffer_size         512  // gercek olan 2048
 #define _gsm_trasbuffer_buffer_size      1024 // 
 
 #define _gsm_mqtt_max_topic_size         128  //
-#define _gsm_mqtt_max_payoad_size        1024 //
+#define _gsm_mqtt_max_payload_size       1024 //
 
 // new
 /* Bu makro      UL_GsmModuleMqttPublishTopic   ve    UL_GsmModuleMqttSubcribeTopic        de var */
@@ -59,8 +60,8 @@
 #define _USR_GSM_UART_RAW_DEINIT_FUNC()    HAL_UART_DeInit(&_USR_GSM_UART_CHANNEL)
 
 #define _USR_GSM_MAIN_POWER_CONTROL(x)     (x ? (DC_DC_POWER_ON_OFF_GPIO_Port->BSRR = DC_DC_POWER_ON_OFF_Pin) : (DC_DC_POWER_ON_OFF_GPIO_Port->BRR = DC_DC_POWER_ON_OFF_Pin))
-#define _USR_GSM_POWER_CONTROL(x)          (x ? (GPRS_POWER_ON_OFF_GPIO_Port->BSRR = GPRS_POWER_ON_OFF_Pin) : (GPRS_POWER_ON_OFF_GPIO_Port->BRR = GPRS_POWER_ON_OFF_Pin))
-#define _USR_GSM_POWERKEY_CONTROL(x)       (x ? (PWRKEY_CONTROL_GPIO_Port->BSRR = PWRKEY_CONTROL_Pin) : (PWRKEY_CONTROL_GPIO_Port->BRR = PWRKEY_CONTROL_Pin))
+#define _USR_GSM_POWER_CONTROL(x)          (x ? (GPRS_POWER_ON_OFF_GPIO_Port->BSRR  = GPRS_POWER_ON_OFF_Pin)  : (GPRS_POWER_ON_OFF_GPIO_Port->BRR  = GPRS_POWER_ON_OFF_Pin))
+#define _USR_GSM_POWERKEY_CONTROL(x)       (x ? (PWRKEY_CONTROL_GPIO_Port->BSRR     = PWRKEY_CONTROL_Pin)     : (PWRKEY_CONTROL_GPIO_Port->BRR     = PWRKEY_CONTROL_Pin))
 
 typedef enum
 {
@@ -118,13 +119,13 @@ typedef struct S_GSM_APN_PARAMETERS_TAG
 
 typedef struct S_GSM_MQTT_PARAMETERS_TAG
 {
-    char urlBuf[256];
+    char urlBuf[64];       // 256
     int port;
-    char randomIdBuf[64];
-    char usernameBuf[64];
-    char passwordBuf[64];
+    char randomIdBuf[16];   // 64
+    char usernameBuf[16];   // 64
+    char passwordBuf[16];   // 64
     int keepAlive;
-    char userConnectionName[64];
+    char userConnectionName[16];   // 64
     int connectionTimeout;
     EPppMqttUrlType urlType;
 }S_GSM_MQTT_PARAMETERS;
@@ -154,6 +155,9 @@ typedef struct S_GSM_FTP_TAG
     char fileNameBuf[64];
 }S_GSM_FTP;
 
+extern bool responseSubcribeDataCallbackFlag;
+extern char response[];
+
 void UL_GsmModuleInitial(S_GSM_PARAMETERS *f_pParam);
 void UL_GsmModuleDeInitial(void);
 bool UL_GsmModuleCheck(void);
@@ -175,4 +179,5 @@ int UL_GsmModuleReadFile(const char *f_cpFileName, uint32_t f_startIndex, uint32
 bool UL_GsmModuleDeleteFile(const char *f_cpFileName);
 
 void UL_GsmModulePeripheral(EGsmPeripheral f_eControl);
+
 #endif

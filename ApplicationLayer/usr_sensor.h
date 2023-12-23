@@ -41,7 +41,7 @@ extern S_BATTERY_DATA                 g_sBatteryParameters;
 extern S_NTC_PARAMETERS               g_sNtcParameters;
 extern S_HALLEFFECT_PARAMETERS        g_sHalleffectParameters;
 extern S_ULTRASONIC_SENSOR_PARAMETERS g_sUltrasonicParameters;
-extern S_TIMEDATE                     g_sTimeParameters;
+// extern S_TIMEDATE                     g_sTimeParameters;
 
 extern S_SENSOR_ALL_VALUES            g_sAllSensorValues;
 
